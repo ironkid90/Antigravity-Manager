@@ -248,6 +248,40 @@ export default function ApiProxy() {
     });
 
     const codexConfig = appConfig?.proxy.codex || getDefaultCodexConfig();
+    const proxyBaseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig?.proxy.port || 8045}`;
+    const openAiBaseUrl = `${proxyBaseUrl}/v1`;
+    const codexEditorModels = useMemo(() => {
+        const detected = codexStatus?.models && codexStatus.models.length > 0
+            ? codexStatus.models
+            : codexConfig.models;
+        const fallback = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.1-codex-mini'];
+        const source = detected.length > 0 ? detected : fallback;
+        return Array.from(new Set(source))
+            .map((model) => model.startsWith('codex:') ? model : `codex:${model}`)
+            .sort();
+    }, [codexConfig.models, codexStatus?.models]);
+    const vsCodeModelConfig = useMemo(() => {
+        return JSON.stringify([
+            {
+                name: 'OpenAI',
+                vendor: 'openai',
+            },
+            {
+                name: 'Codex via Antigravity',
+                vendor: 'customoai',
+                apiKey: 'PASTE_ANTIGRAVITY_PROXY_API_KEY_OR_USER_TOKEN',
+                models: codexEditorModels.map((modelId) => ({
+                    id: modelId,
+                    name: modelId,
+                    url: `${openAiBaseUrl}/responses`,
+                    toolCalling: false,
+                    vision: true,
+                    maxInputTokens: 128000,
+                    maxOutputTokens: 16000,
+                })),
+            },
+        ], null, 2);
+    }, [codexEditorModels, openAiBaseUrl]);
 
 
     // 生成自定义映射表单的选项 (从 models 动态生成)
@@ -2853,8 +2887,7 @@ print(response.choices[0].message.content)`;
                                             <span className="text-xs font-bold text-blue-600">{t('proxy.multi_protocol.openai_label')}</span>
                                             <button onClick={(e) => {
                                                 e.stopPropagation();
-                                                const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                copyToClipboardHandler(`${baseUrl}/v1`, 'openai');
+                                                copyToClipboardHandler(openAiBaseUrl, 'openai');
                                             }} className="btn btn-ghost btn-xs">
                                                 {copied === 'openai' ? <CheckCircle size={14} /> : <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-tighter"><Copy size={12} /> {t('proxy.multi_protocol.copy_base', { defaultValue: 'Base' })}</div>}
                                             </button>
@@ -2864,8 +2897,7 @@ print(response.choices[0].message.content)`;
                                                 <code className="text-[10px] opacity-70">/v1/chat/completions</code>
                                                 <button onClick={(e) => {
                                                     e.stopPropagation();
-                                                    const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                    copyToClipboardHandler(`${baseUrl}/v1/chat/completions`, 'openai-chat');
+                                                    copyToClipboardHandler(`${openAiBaseUrl}/chat/completions`, 'openai-chat');
                                                 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {copied === 'openai-chat' ? <CheckCircle size={10} className="text-green-500" /> : <Copy size={10} />}
                                                 </button>
@@ -2874,8 +2906,7 @@ print(response.choices[0].message.content)`;
                                                 <code className="text-[10px] opacity-70">/v1/completions</code>
                                                 <button onClick={(e) => {
                                                     e.stopPropagation();
-                                                    const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                    copyToClipboardHandler(`${baseUrl}/v1/completions`, 'openai-compl');
+                                                    copyToClipboardHandler(`${openAiBaseUrl}/completions`, 'openai-compl');
                                                 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {copied === 'openai-compl' ? <CheckCircle size={10} className="text-green-500" /> : <Copy size={10} />}
                                                 </button>
@@ -2884,8 +2915,7 @@ print(response.choices[0].message.content)`;
                                                 <code className="text-[10px] opacity-70 font-bold text-blue-500">/v1/responses (Codex)</code>
                                                 <button onClick={(e) => {
                                                     e.stopPropagation();
-                                                    const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                    copyToClipboardHandler(`${baseUrl}/v1/responses`, 'openai-resp');
+                                                    copyToClipboardHandler(`${openAiBaseUrl}/responses`, 'openai-resp');
                                                 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {copied === 'openai-resp' ? <CheckCircle size={10} className="text-green-500" /> : <Copy size={10} />}
                                                 </button>
@@ -2902,8 +2932,7 @@ print(response.choices[0].message.content)`;
                                             <span className="text-xs font-bold text-purple-600">{t('proxy.multi_protocol.anthropic_label')}</span>
                                             <button onClick={(e) => {
                                                 e.stopPropagation();
-                                                const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                copyToClipboardHandler(`${baseUrl}/v1/messages`, 'anthropic');
+                                                copyToClipboardHandler(`${openAiBaseUrl.replace(/\/v1$/, '')}/v1/messages`, 'anthropic');
                                             }} className="btn btn-ghost btn-xs">
                                                 {copied === 'anthropic' ? <CheckCircle size={14} /> : <Copy size={14} />}
                                             </button>
@@ -2920,8 +2949,7 @@ print(response.choices[0].message.content)`;
                                             <span className="text-xs font-bold text-green-600">{t('proxy.multi_protocol.gemini_label')}</span>
                                             <button onClick={(e) => {
                                                 e.stopPropagation();
-                                                const baseUrl = status.running ? status.base_url : `http://127.0.0.1:${appConfig.proxy.port || 8045}`;
-                                                copyToClipboardHandler(`${baseUrl}/v1beta/models`, 'gemini');
+                                                copyToClipboardHandler(`${proxyBaseUrl}/v1beta/models`, 'gemini');
                                             }} className="btn btn-ghost btn-xs">
                                                 {copied === 'gemini' ? <CheckCircle size={14} /> : <Copy size={14} />}
                                             </button>
@@ -2936,6 +2964,84 @@ print(response.choices[0].message.content)`;
 
 
                 {/* 支持模型与集成 */}
+                {
+                    !configLoading && !configError && appConfig && (
+                        <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 overflow-hidden mt-4">
+                            <div className="p-4 space-y-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <h3 className="text-base font-bold text-gray-900 dark:text-base-content flex items-center gap-2">
+                                            <Terminal size={16} />
+                                            VS Code / Copilot Custom OAI Setup
+                                        </h3>
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                                            Use the Antigravity proxy API key for the easiest local setup. User tokens also work, but they are better when you want per-client isolation or easy revocation later.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 shrink-0">
+                                        <button
+                                            onClick={() => copyToClipboardHandler(`${openAiBaseUrl}/responses`, 'vscode-responses')}
+                                            className="btn btn-xs btn-outline gap-1.5"
+                                        >
+                                            {copied === 'vscode-responses' ? <CheckCircle size={12} /> : <Copy size={12} />}
+                                            Endpoint
+                                        </button>
+                                        <button
+                                            onClick={() => copyToClipboardHandler(vsCodeModelConfig, 'vscode-json')}
+                                            className="btn btn-xs btn-outline gap-1.5"
+                                        >
+                                            {copied === 'vscode-json' ? <CheckCircle size={12} /> : <Copy size={12} />}
+                                            Config JSON
+                                        </button>
+                                        <button
+                                            onClick={() => copyToClipboardHandler(appConfig.proxy.api_key, 'vscode-api-key')}
+                                            className="btn btn-xs btn-primary gap-1.5 text-white"
+                                        >
+                                            {copied === 'vscode-api-key' ? <CheckCircle size={12} /> : <Copy size={12} />}
+                                            Proxy API Key
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/60 dark:bg-blue-900/10 p-3">
+                                        <div className="text-[11px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300 mb-1">
+                                            Recommended
+                                        </div>
+                                        <p className="text-xs text-gray-700 dark:text-gray-300">
+                                            Point Codex-backed entries to <code>{`${openAiBaseUrl}/responses`}</code> and keep <code>toolCalling</code> set to <code>false</code>.
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-900/10 p-3">
+                                        <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-1">
+                                            Auth
+                                        </div>
+                                        <p className="text-xs text-gray-700 dark:text-gray-300">
+                                            Use the proxy API key first. Switch to a user token later if you want cleaner revocation, separate clients, or tighter quotas.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl bg-gray-950 text-gray-100 border border-gray-800 overflow-hidden">
+                                    <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
+                                        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                                            chatLanguageModels.json
+                                        </span>
+                                        <span className="text-[10px] text-gray-500">
+                                            Replace the API key placeholder with your Antigravity credential
+                                        </span>
+                                    </div>
+                                    <div className="max-h-72 overflow-auto">
+                                        <pre className="p-4 text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+                                            {vsCodeModelConfig}
+                                        </pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
+
                 {
                     !configLoading && !configError && appConfig && (
                         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 overflow-hidden mt-4">

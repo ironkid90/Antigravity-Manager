@@ -817,7 +817,7 @@ pub fn codex_request_from_chat_body(
     body: &Value,
     mapped_model: &str,
 ) -> Result<CodexApiRequest, String> {
-    reject_client_tools(body)?;
+    let body = strip_client_tools(body);
 
     let model = strip_codex_target(mapped_model).unwrap_or_else(|| mapped_model.to_string());
     let stream = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -878,7 +878,7 @@ pub fn codex_request_from_responses_body(
     body: &Value,
     mapped_model: &str,
 ) -> Result<CodexApiRequest, String> {
-    reject_client_tools(body)?;
+    let body = strip_client_tools(body);
 
     let model = strip_codex_target(mapped_model).unwrap_or_else(|| mapped_model.to_string());
     let stream = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1001,18 +1001,15 @@ fn usage_to_responses_json(usage: Option<&CodexUsage>) -> Value {
     })
 }
 
-fn reject_client_tools(body: &Value) -> Result<(), String> {
-    if body
-        .get("tools")
-        .and_then(|v| v.as_array())
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
-    {
-        return Err(
-            "Codex provider does not support client-supplied tool schemas yet; remove `tools` or route this model to a non-Codex provider".to_string(),
-        );
+fn strip_client_tools(body: &Value) -> Value {
+    match body {
+        Value::Object(map) => {
+            let mut sanitized = map.clone();
+            sanitized.remove("tools");
+            Value::Object(sanitized)
+        }
+        _ => body.clone(),
     }
-    Ok(())
 }
 
 fn join_non_empty(parts: Vec<String>) -> Option<String> {
@@ -1085,14 +1082,15 @@ mod tests {
     }
 
     #[test]
-    fn rejects_client_tools_for_codex_requests() {
+    fn ignores_client_tools_for_codex_requests() {
         let body = json!({
             "model": "gpt-4o",
             "messages": [{ "role": "user", "content": "hi" }],
             "tools": [{ "type": "function", "function": { "name": "demo" }}]
         });
-        let error = codex_request_from_chat_body(&body, "codex:gpt-5.4").unwrap_err();
-        assert!(error.contains("client-supplied tool schemas"));
+        let request = codex_request_from_chat_body(&body, "codex:gpt-5.4").unwrap();
+        assert_eq!(request.model, "gpt-5.4");
+        assert!(request.prompt_text.contains("User:\nhi"));
     }
 
     #[test]
