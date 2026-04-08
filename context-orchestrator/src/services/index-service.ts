@@ -39,6 +39,16 @@ function hashText(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function deterministicUuidFromText(value: string): string {
+  const hash = hashText(value);
+  const timeLow = hash.slice(0, 8);
+  const timeMid = hash.slice(8, 12);
+  const timeHigh = `5${hash.slice(13, 16)}`;
+  const clockSeq = `${["8", "9", "a", "b"][Number.parseInt(hash[16] ?? "0", 16) % 4]}${hash.slice(17, 20)}`;
+  const node = hash.slice(20, 32);
+  return `${timeLow}-${timeMid}-${timeHigh}-${clockSeq}-${node}`;
+}
+
 function normalizeRepoScope(repoRoot: string): string {
   return repoRoot.replace(/[\\/:]+/g, "_").toLowerCase();
 }
@@ -220,6 +230,82 @@ function parseTomlArray(raw: string): string[] | undefined {
   return items;
 }
 
+function parseTomlInlineTable(raw: string): Record<string, string> | undefined {
+  const value = stripTomlComment(raw);
+  if (!value.startsWith("{") || !value.endsWith("}")) {
+    return undefined;
+  }
+
+  const body = value.slice(1, -1).trim();
+  if (!body) {
+    return {};
+  }
+
+  const entries = new Map<string, string>();
+  let token = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaped = false;
+
+  const flush = () => {
+    const part = token.trim();
+    token = "";
+    if (!part) {
+      return;
+    }
+
+    const separatorIndex = part.indexOf("=");
+    if (separatorIndex <= 0) {
+      return;
+    }
+
+    const key = part.slice(0, separatorIndex).trim();
+    const parsedValue = parseTomlString(part.slice(separatorIndex + 1).trim());
+    if (!key || parsedValue === undefined) {
+      return;
+    }
+
+    entries.set(key, parsedValue);
+  };
+
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (escaped) {
+      token += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\" && inDoubleQuote) {
+      token += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      token += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      token += char;
+      continue;
+    }
+
+    if (char === "," && !inSingleQuote && !inDoubleQuote) {
+      flush();
+      continue;
+    }
+
+    token += char;
+  }
+
+  flush();
+  return Object.fromEntries(entries);
+}
+
 const SECRET_KEY_PATTERN = /(token|secret|password|api[_-]?key|auth|cookie)/i;
 
 function sanitizeTomlMcpLine(line: string): string {
@@ -347,6 +433,7 @@ function inventoryToDocument(entry: McpServerInventoryEntry): IndexedDocument {
       args: entry.args,
       cwd: entry.cwd,
       url: entry.url,
+      env: entry.metadata?.env,
       ...(entry.metadata ?? {}),
     },
   };
@@ -381,6 +468,10 @@ function parseCodexTomlMcpServers(filePath: string): McpServerInventoryEntry[] {
       .map((line) => line.match(/^\s*url\s*=\s*(.+)\s*$/)?.[1])
       .map((value) => (value ? parseTomlString(value) : undefined))
       .find((value): value is string => Boolean(value));
+    const env = currentBody
+      .map((line) => line.match(/^\s*env\s*=\s*(.+)\s*$/)?.[1])
+      .map((value) => (value ? parseTomlInlineTable(value) : undefined))
+      .find((value): value is Record<string, string> => Boolean(value));
 
     entries.push({
       inventoryId: `${filePath}#${currentName}`,
@@ -394,11 +485,13 @@ function parseCodexTomlMcpServers(filePath: string): McpServerInventoryEntry[] {
       args,
       cwd,
       url,
+      env,
       text: `${currentName}\n${body}`.trim(),
       metadata: {
         title: currentName,
         path: filePath,
         serverName: currentName,
+        ...(env ? { env: "[REDACTED]" } : {}),
       },
     });
   };
@@ -448,6 +541,14 @@ function parseJsonMcpServers(filePath: string): McpServerInventoryEntry[] {
       : undefined;
     const cwd = typeof settings.cwd === "string" ? settings.cwd : undefined;
     const url = typeof settings.url === "string" ? settings.url : undefined;
+    const env =
+      settings.env && typeof settings.env === "object" && !Array.isArray(settings.env)
+        ? Object.fromEntries(
+            Object.entries(settings.env as Record<string, unknown>).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string",
+            ),
+          )
+        : undefined;
 
     entries.push({
       inventoryId: `${filePath}#${name}`,
@@ -461,6 +562,7 @@ function parseJsonMcpServers(filePath: string): McpServerInventoryEntry[] {
       args,
       cwd,
       url,
+      env,
       text: `${name}\n${JSON.stringify(sanitizeMcpConfigValue(config), null, 2)}`,
       metadata: {
         title: name,
@@ -606,7 +708,7 @@ function cacheScopeFor(collectionName: string, repoRoot?: string): string {
 }
 
 function pointIdFor(document: IndexedDocument): string {
-  return hashText(`${document.collection}:${document.id}`);
+  return deterministicUuidFromText(`${document.collection}:${document.id}`);
 }
 
 function collectionNameFor(

@@ -1,0 +1,45 @@
+{
+  "id": "4b10269c-7530-4aec-a12e-c7a54d2a8552",
+  "mode": "plan",
+  "task_class": "coding",
+  "summary": "Live MCP tool sweep executed",
+  "explanation": "Testing every orchestrator and qdrant semantic search tool over stdio.",
+  "recommended_actions": [
+    {
+      "label": "Review the assembled context pack before making edits",
+      "priority": "high",
+      "reason": "This keeps the main execution agent aligned with the available evidence."
+    }
+  ],
+  "risks": [],
+  "questions": [],
+  "evidence": [
+    {
+      "kind": "user_input",
+      "ref": "codex",
+      "note": "Testing every orchestrator and qdrant semantic search tool over stdio."
+    },
+    {
+      "kind": "repo_fact",
+      "ref": "src/gateway/server.ts",
+      "note": "Related file: src/gateway/server.ts"
+    },
+    {
+      "kind": "repo_fact",
+      "ref": "src/services/mcp-health.ts",
+      "note": "Related file: src/services/mcp-health.ts"
+    }
+  ],
+  "confidence": 0.55,
+  "created_at": "2026-04-08T04:10:38.012Z",
+  "repo_id": "context-orchestrator",
+  "profile_id": "codex",
+  "source_client": "codex",
+  "memory_category": "other",
+  "memory_status": "NEW",
+  "related_files": [
+    "src/gateway/server.ts",
+    "src/services/mcp-health.ts"
+  ],
+  "cwd": "C:\\Users\\Gabi\\Documents\\GitHub\\Antigravity-Manager\\context-orchestrator"
+}

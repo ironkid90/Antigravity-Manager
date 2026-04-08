@@ -60,7 +60,7 @@ export class GeminiEmbeddingService implements EmbeddingService {
                 parts: [{ text }],
               },
               ...(this.outputDimensionality
-                ? { output_dimensionality: this.outputDimensionality }
+                ? { outputDimensionality: this.outputDimensionality }
                 : {}),
             }),
           },

@@ -129,6 +129,7 @@ export interface McpServerInventoryEntry {
   args?: string[];
   cwd?: string;
   url?: string;
+  env?: Record<string, string>;
   text?: string;
   metadata?: Record<string, unknown>;
 }

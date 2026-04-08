@@ -33,6 +33,15 @@ function fixturePath(): string {
   );
 }
 
+function envFixturePath(): string {
+  const currentFile = fileURLToPath(import.meta.url);
+  return path.join(
+    path.dirname(currentFile),
+    "fixtures",
+    "stdio-env-server.mjs",
+  );
+}
+
 test("McpHealthService probes stdio servers and persists latest probe state", async () => {
   const { artifacts, service } = createWorkspace();
   const entry: McpServerInventoryEntry = {
@@ -104,4 +113,29 @@ test("McpHealthService classifies unsupported and broken inventory entries", asy
   assert.equal(byId.get("docker-only")?.status, "inventory_only");
   assert.equal(byId.get("missing-command")?.status, "invalid_config");
   assert.equal(byId.get("spawn-fail")?.status, "unreachable");
+});
+
+test("McpHealthService forwards configured env vars to stdio probes", async () => {
+  const { service } = createWorkspace();
+  const entry: McpServerInventoryEntry = {
+    inventoryId: "fixture-stdio-env",
+    name: "fixture-stdio-env",
+    title: "fixture-stdio-env",
+    transport: "stdio",
+    command: process.execPath,
+    args: [envFixturePath()],
+    env: {
+      MCP_TEST_FLAG: "expected",
+    },
+    cwd: process.cwd(),
+    sourcePath: envFixturePath(),
+    sourceKind: "codex_toml",
+    repoScope: "global",
+  };
+
+  const result = await service.probeServers([entry]);
+
+  assert.equal(result.summary.healthy, 1);
+  assert.equal(result.probes[0]?.status, "healthy");
+  assert.equal(result.probes[0]?.toolCount, 1);
 });

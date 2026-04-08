@@ -84,6 +84,9 @@ test("listMcpServerInventory classifies transports and preserves runnable fields
             command: "npx",
             args: ["@modelcontextprotocol/server-filesystem"],
             cwd: root,
+            env: {
+              MCP_TEST_FLAG: "json-env",
+            },
           },
           remote_docs: {
             url: "http://127.0.0.1:9010/mcp",
@@ -109,6 +112,7 @@ test("listMcpServerInventory classifies transports and preserves runnable fields
       "command = 'npx'",
       "args = ['@playwright/mcp@latest']",
       `cwd = '${root.replace(/\\/g, "\\\\")}'`,
+      "env = { MCP_TEST_FLAG = 'toml-env' }",
       "",
       "[mcp_servers.remote_design]",
       "url = 'https://example.com/mcp'",
@@ -121,12 +125,14 @@ test("listMcpServerInventory classifies transports and preserves runnable fields
   assert.equal(byName.get("filesystem")?.transport, "stdio");
   assert.equal(byName.get("filesystem")?.command, "npx");
   assert.equal(byName.get("filesystem")?.cwd, root);
+  assert.equal(byName.get("filesystem")?.env?.MCP_TEST_FLAG, "json-env");
 
   assert.equal(byName.get("remote_docs")?.transport, "streamable_http");
   assert.equal(byName.get("remote_docs")?.url, "http://127.0.0.1:9010/mcp");
 
   assert.equal(byName.get("playwright")?.transport, "stdio");
   assert.equal(byName.get("playwright")?.args?.[0], "@playwright/mcp@latest");
+  assert.equal(byName.get("playwright")?.env?.MCP_TEST_FLAG, "toml-env");
 
   assert.equal(byName.get("remote_design")?.transport, "streamable_http");
   assert.equal(byName.get("github")?.transport, "docker_registry");

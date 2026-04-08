@@ -178,6 +178,7 @@ export class McpHealthService {
       command: entry.command!,
       args: entry.args,
       cwd: entry.cwd,
+      env: entry.env,
       stderr: "pipe",
     });
 
