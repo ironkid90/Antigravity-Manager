@@ -133,3 +133,74 @@ test("ContextService caches prepareContext results and invalidates repo-scoped e
   assert.equal(calls.searchSessionSummaries, 1);
   assert.equal(calls.searchMcpServers, 2);
 });
+
+test("ContextService refreshes MCP search cache when rendered server docs change", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "context-orchestrator-context-mcp-cache-"));
+  const sqlite = new SqliteStore(path.join(root, "state.sqlite"));
+  const artifacts = new ArtifactRepository(sqlite, path.join(root, "artifacts"));
+  const cache = new CacheRepository(sqlite);
+  const configPath = path.join(root, "config.toml");
+
+  fs.writeFileSync(
+    configPath,
+    [
+      "[mcp_servers.context_orchestrator]",
+      "command = 'node'",
+      "args = ['dist/main.js']",
+    ].join("\n"),
+  );
+
+  let currentText = "context_orchestrator\nenv = raw-secret-value";
+  const indexService = {
+    searchMcpServers: async () => [],
+    getMcpConfigPaths: () => [configPath],
+    listMcpServerDocuments: () => [
+      {
+        id: `${configPath}#context_orchestrator`,
+        title: "context_orchestrator",
+        text: currentText,
+        path: configPath,
+        collection: "mcp_servers" as const,
+        metadata: {
+          title: "context_orchestrator",
+          path: configPath,
+        },
+      },
+    ],
+  };
+
+  const firstService = new ContextService(
+    [],
+    artifacts,
+    cache,
+    indexService as never,
+    {
+      skills: "skills_collection",
+      sessionSummaries: "memory_collection",
+      repoDocs: "docs_collection",
+      mcpServers: "mcp_collection",
+    },
+  );
+
+  const first = await firstService.searchMcpServers(root, "context_orchestrator", 5);
+  assert.match(first[0]?.snippet ?? "", /raw-secret-value/);
+
+  currentText = "context_orchestrator\nenv = [REDACTED]";
+
+  const secondService = new ContextService(
+    [],
+    artifacts,
+    cache,
+    indexService as never,
+    {
+      skills: "skills_collection",
+      sessionSummaries: "memory_collection",
+      repoDocs: "docs_collection",
+      mcpServers: "mcp_collection",
+    },
+  );
+
+  const second = await secondService.searchMcpServers(root, "context_orchestrator", 5);
+  assert.doesNotMatch(second[0]?.snippet ?? "", /raw-secret-value/);
+  assert.match(second[0]?.snippet ?? "", /\[REDACTED\]/);
+});

@@ -41,7 +41,7 @@ test("GeminiEmbeddingService requests embeddings with configured dimensionality"
     const vectors = await service.createEmbeddings(["hello"], "gemini-embedding-001");
     assert.deepEqual(vectors, [[0.1, 0.2, 0.3]]);
     assert.match(requests[0]?.url ?? "", /models\/gemini-embedding-001:embedContent$/);
-    assert.match(requests[0]?.body ?? "", /"outputDimensionality":3072/);
+    assert.match(requests[0]?.body ?? "", /"output_dimensionality":3072/);
   } finally {
     globalThis.fetch = originalFetch;
   }

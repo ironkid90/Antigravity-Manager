@@ -220,6 +220,45 @@ function parseTomlArray(raw: string): string[] | undefined {
   return items;
 }
 
+const SECRET_KEY_PATTERN = /(token|secret|password|api[_-]?key|auth|cookie)/i;
+
+function sanitizeTomlMcpLine(line: string): string {
+  if (/^\s*env\s*=/.test(line)) {
+    const indent = line.match(/^\s*/)?.[0] ?? "";
+    return `${indent}env = { [REDACTED] }`;
+  }
+
+  return line;
+}
+
+function sanitizeMcpConfigValue(value: unknown, parentKey?: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeMcpConfigValue(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    if (parentKey && SECRET_KEY_PATTERN.test(parentKey) && typeof value === "string") {
+      return "[REDACTED]";
+    }
+    return value;
+  }
+
+  const objectValue = value as Record<string, unknown>;
+  const sanitizedEntries = Object.entries(objectValue).map(([key, entryValue]) => {
+    if (key === "env" && entryValue && typeof entryValue === "object" && !Array.isArray(entryValue)) {
+      return [key, "[REDACTED]"] as const;
+    }
+
+    if (SECRET_KEY_PATTERN.test(key) && typeof entryValue === "string") {
+      return [key, "[REDACTED]"] as const;
+    }
+
+    return [key, sanitizeMcpConfigValue(entryValue, key)] as const;
+  });
+
+  return Object.fromEntries(sanitizedEntries);
+}
+
 function walk(root: string): string[] {
   if (!fs.existsSync(root)) {
     return [];
@@ -325,7 +364,7 @@ function parseCodexTomlMcpServers(filePath: string): McpServerInventoryEntry[] {
       return;
     }
 
-    const body = currentBody.join("\n").trim();
+    const body = currentBody.map(sanitizeTomlMcpLine).join("\n").trim();
     const command = currentBody
       .map((line) => line.match(/^\s*command\s*=\s*(.+)\s*$/)?.[1])
       .map((value) => (value ? parseTomlString(value) : undefined))
@@ -422,12 +461,12 @@ function parseJsonMcpServers(filePath: string): McpServerInventoryEntry[] {
       args,
       cwd,
       url,
-      text: `${name}\n${JSON.stringify(config, null, 2)}`,
+      text: `${name}\n${JSON.stringify(sanitizeMcpConfigValue(config), null, 2)}`,
       metadata: {
         title: name,
         path: filePath,
         serverName: name,
-        ...(settings ?? {}),
+        ...((sanitizeMcpConfigValue(settings) as Record<string, unknown>) ?? {}),
       },
     });
   }
@@ -449,12 +488,16 @@ function parseJsonMcpServers(filePath: string): McpServerInventoryEntry[] {
       sourceKind: "docker_registry_json",
       repoScope: "global",
       transport: "docker_registry",
-      text: `docker:${name}\n${JSON.stringify(config, null, 2)}`,
+      text: `docker:${name}\n${JSON.stringify(sanitizeMcpConfigValue(config), null, 2)}`,
       metadata: {
         title: `docker:${name}`,
         path: filePath,
         serverName: name,
-        ...(config && typeof config === "object" ? (config as Record<string, unknown>) : {}),
+        ...(
+          config && typeof config === "object"
+            ? (sanitizeMcpConfigValue(config) as Record<string, unknown>)
+            : {}
+        ),
       },
     });
   }

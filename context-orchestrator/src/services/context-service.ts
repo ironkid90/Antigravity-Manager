@@ -310,9 +310,12 @@ export class ContextService {
   }
 
   private mcpServersVersion(repoRoot?: string): string {
-    const paths = this.indexService.getMcpConfigPaths(repoRoot);
-    const existing = paths.filter((filePath) => fs.existsSync(filePath));
-    return fileVersionToken(existing);
+    const documents = this.indexService.listMcpServerDocuments(repoRoot);
+    return hashParts(
+      documents
+        .map((document) => `${document.id}:${document.title}:${document.text}`)
+        .sort(),
+    );
   }
 
   private searchSkillsFallback(query: string, limit: number): SearchHit[] {

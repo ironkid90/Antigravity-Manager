@@ -131,3 +131,50 @@ test("listMcpServerInventory classifies transports and preserves runnable fields
   assert.equal(byName.get("remote_design")?.transport, "streamable_http");
   assert.equal(byName.get("github")?.transport, "docker_registry");
 });
+
+test("listMcpServers redacts inline env secrets from indexed config text", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "context-orchestrator-mcp-redaction-"));
+  const jsonPath = path.join(root, "mcp-settings.json");
+  const tomlPath = path.join(root, "config.toml");
+
+  fs.writeFileSync(
+    jsonPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          remote_docs: {
+            url: "https://example.com/mcp",
+            env: {
+              API_KEY: "json-secret-value",
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  fs.writeFileSync(
+    tomlPath,
+    [
+      "[mcp_servers.context_orchestrator]",
+      "command = 'node'",
+      "args = ['dist/main.js']",
+      "env = { OPENAI_API_KEY = 'toml-secret-value', OPENAI_BASE_URL = 'http://127.0.0.1:8045/v1' }",
+    ].join("\n"),
+  );
+
+  const docs = listMcpServers([jsonPath, tomlPath], root);
+  const byTitle = new Map(docs.map((doc) => [doc.title, doc]));
+
+  const tomlDoc = byTitle.get("context_orchestrator");
+  assert.ok(tomlDoc);
+  assert.match(tomlDoc.text, /\[REDACTED\]/);
+  assert.doesNotMatch(tomlDoc.text, /toml-secret-value/);
+
+  const jsonDoc = byTitle.get("remote_docs");
+  assert.ok(jsonDoc);
+  assert.match(jsonDoc.text, /\[REDACTED\]/);
+  assert.doesNotMatch(jsonDoc.text, /json-secret-value/);
+});
