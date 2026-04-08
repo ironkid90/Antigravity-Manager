@@ -711,6 +711,17 @@ function pointIdFor(document: IndexedDocument): string {
   return deterministicUuidFromText(`${document.collection}:${document.id}`);
 }
 
+function payloadForDocument(document: IndexedDocument): Record<string, unknown> {
+  return {
+    collection: document.collection,
+    documentId: document.id,
+    title: document.title,
+    text: document.text,
+    path: document.path,
+    ...(document.metadata ?? {}),
+  };
+}
+
 function collectionNameFor(
   config: OrchestratorConfig,
   collection: IndexedDocument["collection"],
@@ -999,9 +1010,9 @@ export class IndexService {
       const cached = this.cache.get<EmbeddedCacheValue>(cacheKey, versionToken);
       if (cached?.value?.vector?.length) {
         prepared.push({
-          pointId: cached.value.pointId,
+          pointId: pointIdFor(document),
           vector: cached.value.vector,
-          payload: cached.value.payload,
+          payload: payloadForDocument(document),
         });
         continue;
       }
@@ -1019,14 +1030,7 @@ export class IndexService {
       for (const [offset, document] of batch.entries()) {
         const vector = vectors[offset];
         const pointId = pointIdFor(document);
-        const payload = {
-          collection: document.collection,
-          documentId: document.id,
-          title: document.title,
-          text: document.text,
-          path: document.path,
-          ...(document.metadata ?? {}),
-        };
+        const payload = payloadForDocument(document);
         const versionToken = hashText(`${document.text}:${JSON.stringify(document.metadata ?? {})}`);
         const cacheKey = this.cache.buildKey(embeddingScope, [document.id], versionToken);
         this.cache.set<EmbeddedCacheValue>(embeddingScope, cacheKey, versionToken, {

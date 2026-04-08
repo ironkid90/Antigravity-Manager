@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { listMcpServerInventory, listMcpServers, listRepoDocs } from "../src/services/index-service.js";
+import { IndexService, listMcpServerInventory, listMcpServers, listRepoDocs } from "../src/services/index-service.js";
 
 test("listRepoDocs ignores noisy directories and chunks large docs", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "context-orchestrator-index-"));
@@ -183,4 +183,72 @@ test("listMcpServers redacts inline env secrets from indexed config text", () =>
   assert.ok(jsonDoc);
   assert.match(jsonDoc.text, /\[REDACTED\]/);
   assert.doesNotMatch(jsonDoc.text, /json-secret-value/);
+});
+
+test("IndexService uses UUID-compatible deterministic point ids for Qdrant upserts", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "context-orchestrator-skill-index-"));
+  const skillDir = path.join(root, "skill-a");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Skill A\nSome searchable content.");
+
+  const recordedIds: string[] = [];
+  const qdrant = {
+    getCollection: async () => {
+      throw new Error("404 not found");
+    },
+    createCollection: async () => undefined,
+    createPayloadIndex: async () => undefined,
+    upsert: async (_collection: string, payload: { points: Array<{ id: string }> }) => {
+      recordedIds.push(...payload.points.map((point) => point.id));
+    },
+  };
+
+  const cache = {
+    buildKey: (_scope: string, keys: string[], version: string) => `${keys.join(":")}:${version}`,
+    get: () => undefined,
+    set: () => undefined,
+  };
+
+  const embeddings = {
+    isConfigured: () => true,
+    createEmbeddings: async (input: string[]) => input.map(() => [0.1, 0.2, 0.3]),
+  };
+
+  const service = new IndexService(
+    {
+      dataDir: root,
+      sqlitePath: path.join(root, "state.sqlite"),
+      artifactsDir: path.join(root, "artifacts"),
+      qdrantUrl: "http://127.0.0.1:6333",
+      openaiBaseUrl: "http://127.0.0.1:8045/v1",
+      embeddingProvider: "openai",
+      embeddingBaseUrl: "http://127.0.0.1:8045/v1",
+      plannerModel: "gpt-5.4",
+      plannerReasoningEffort: "high",
+      embeddingModel: "text-embedding-3-small",
+      qdrantCollections: {
+        skills: "skills-test",
+        sessionSummaries: "memory-test",
+        repoDocs: "docs-test",
+        mcpServers: "mcp-test",
+      },
+      skillRoots: [root],
+      mcpConfigPaths: [],
+    },
+    qdrant as never,
+    embeddings as never,
+    cache as never,
+    {
+      recordIndexRun: () => undefined,
+    } as never,
+  );
+
+  await service.ingestSkills();
+
+  assert.ok(recordedIds.length > 0);
+  assert.ok(
+    recordedIds.every((id) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+    ),
+  );
 });
