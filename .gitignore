@@ -54,6 +54,8 @@ start.ps1
 
 # Added by cargo
 
+.context-orchestrator/
+context-orchestrator/start.ps1
 /target
 context-orchestrator/context-orchestrator-data/artifacts/2026/04/fa44734a-10c4-4245-8699-b709cd11072b.json
 context-orchestrator/context-orchestrator-data/artifacts/2026/04/435355bf-dd4b-4be7-b0a4-dd68949efd7e.json
