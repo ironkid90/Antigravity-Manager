@@ -50,7 +50,7 @@ pnpm-lock.yaml
 # Copilot Orchestrator temporary files
 .orchestrator/
 .worktrees/
-
+start.ps1
 
 # Added by cargo
 
